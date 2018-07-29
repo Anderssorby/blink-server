@@ -1,141 +1,143 @@
 #!/bin/python
-import os
-import time
 import subprocess
-import commands
 import json
 
-# Change the PWD to this locationself.wfile.write(
-abspath = os.path.abspath(__file__)
-dname = os.path.dirname(abspath)
-os.chdir(dname)
 
 # Variables (Constants)
 DEFAULT_VIDEO = 'totem'
-DEFAULT_MUSIC = 'rhythmbox'
+DEFAULT_MUSIC = 'spotify'
 APPS = ('totem', 'vlc', 'xbmc', 'rhythmbox')
 
-def is_json(myjson):
+
+def try_json(myjson):
     try:
         json_object = json.loads(myjson)
-    except ValueError, e:
+    except ValueError:
         return False
-    return True
+    return json_object
+
 
 # Kill all running aps
 def killApps():
 
     # Loop through them and kill them as we go along
     for APP in APPS:
-        getPid = commands.getoutput("ps -e | grep " + APP + " | awk {'print $1'}")
-        #print "ps -e | grep " + APP + " | awk {'print $1'} , PID: " + getPid
+        pid = subprocess.check_output("ps -e | grep " + APP +
+                                         " | awk {'print $1'}")
+        #print "ps -e | grep " + APP + " | awk {'print $1'} , PID: " + pid
 
         # If there is a PID, then the application is running and we can kill it
-        if getPid != '':
-            commands.getoutput('kill ' + getPid)
-            print 'Killing ' + APP + ", VIA: " + 'kill ' + getPid
+        if pid != '':
+            subprocess.check_output('kill ' + pid)
+            print('Killing ' + APP + ", VIA: " + 'kill ' + pid)
+
 
 # This function will be used to confirm whether an application is running
 def appRunning(APP):
 
     # Get the PID, if it exists then the app is running
-    getPid = commands.getoutput("ps -e | grep " + APP + " | awk {'print $1'}")
+    pid = subprocess.check_output("ps -e | grep " + APP +
+                                     " | awk {'print $1'}")
 
     # If there is a PID, then the application is indeed running
-    if getPid != '':
-        return False
-    else:
-        return True
+    return pid != ''
+
+
+# The dictionary with the commands and switches to be run
+DEFAULTS = {
+    'up': ['xdotool', 'key', "Up"],
+    'down': ['xdotool', 'key', "Down"],
+    'left': ['xdotool', 'key', "Left"],
+    'right': ['xdotool', 'key', "Right"],
+    'ok': ['xdotool', 'key', "KP_Enter"],
+    'play': ['xdotool', 'key', "XF86AudioPlay"],
+    'info': ['xdotool', 'key', 'Menu'],
+    'back': ['xdotool', 'key', "Escape"],
+    'next': ['xdotool', 'key', "XF86AudioNext"],
+    'prev': ['xdotool', 'key', "XF86AudioPrev"],
+    'video': [DEFAULT_VIDEO],
+    'stop': ['xdotool', 'key', "XF86AudioStop"],
+    'music': [DEFAULT_MUSIC],
+    'vol-up': ['xdotool', 'key', "XF86AudioRaiseVolume"],
+    'vol-down': ['xdotool', 'key', "XF86AudioLowerVolume"],
+    'click': ['xdotool', 'click', "1"],
+    'rclick': ['xdotool', 'click', "3"],
+    'lock': [
+        "dbus-send", "--type=method_call", "--dest=org.gnome.ScreenSaver",
+        "/org/gnome/ScreenSaver", "org.gnome.ScreenSaver.Lock"
+    ]
+}
+
 
 # This will perform the actions
 def commandKeys(pressed):
-
-    # The dictionary with the commands and switches to be run
-    defaults = {
-        'up':       ['xdotool', 'key', "Up"],
-        'down':     ['xdotool', 'key', "Down"],
-        'left':     ['xdotool', 'key', "Left"],
-        'right':    ['xdotool', 'key', "Right"],
-        'ok':       ['xdotool', 'key', "KP_Enter"],
-        'play':     ['xdotool', 'key', "XF86AudioPlay"],
-        'info':     ['xdotool', 'key', 'Menu'],
-        'back':     ['xdotool', 'key', "Escape"],
-        'next':     ['xdotool', 'key', "XF86AudioNext"],
-        'prev':     ['xdotool', 'key', "XF86AudioPrev"],
-        'video':    [DEFAULT_VIDEO],
-        'stop':     ['xdotool', 'key', "XF86AudioStop"],
-        'music':    [DEFAULT_MUSIC],
-        'vol-up':   ['xdotool', 'key', "XF86AudioRaiseVolume"],
-        'vol-down': ['xdotool', 'key', "XF86AudioLowerVolume"],
-        'click' :   ['xdotool', 'click', "1"],
-        'rclick' :  ['xdotool', 'click', "3"]
-    }
-
-    # Did we receive a JSON string?
-    if is_json(pressed):
-        JSON = json.loads(pressed)
-
+    verbose = True
+    # Did we receive a data string?
+    data = try_json(pressed)
+    if data:
         # Currently we are only concerned with moving the mouse
-        if JSON['action'] == "mouse-move":
+        if data['action'] == "mouse-move":
 
-            # Handle negative values
-            if JSON['x'] < 0 or JSON['y'] < 0:
-                mouseCommand = [
-                    'xdotool',
-                    'mousemove_relative',
-                    '--',
-                    str(JSON['x']),
-                    str(JSON['y'])
-                ]
+            x = data['x']
+            y = data['y']
+
+            if not x or not y:
+                mouse_command = ["xdotool", "click", "click"]
             else:
-                mouseCommand = [
-                    'xdotool',
-                    'mousemove_relative',
-                    str(JSON['x']),
-                    str(JSON['y'])
-                ]
+                x = int(x)
+                y = int(y)
+
+                # Handle negative values
+                if x < 0 or y < 0:
+                    mouse_command = [
+                        'xdotool', 'mousemove_relative', '--',
+                        str(x),
+                        str(y)
+                    ]
+                else:
+                    mouse_command = [
+                        'xdotool', 'mousemove_relative',
+                        str(x), str(y)
+                    ]
 
             # Dispatch the mouse move event
-            xdotool(mouseCommand)
-
+            output = subprocess.check_output(mouse_command)
+            if verbose:
+                print(mouse_command)
+                print(output)
 
     # Was the keypress valid? If so, run the relevant command
     elif pressed == "power":
         killApps()
 
     elif pressed == "fullscreen":
-        xdotool(defaults['click'], True)
-        xdotool(defaults['click'], True)
+        output = subprocess.check_output(DEFAULTS['click'])
 
     # The media launchers are a bit different, we need to check that the application is not already fired up
-    elif pressed == "video" or pressed == "music":
+    elif pressed in ("video", "music"):
 
         # Check if it's already running, if not kill all other players listed in apps and open this one
-        if appRunning(str(defaults[pressed])) == False:
+        if not appRunning(str(DEFAULTS[pressed])):
             #killApps()
-            appLaunch(defaults[pressed], True)
-            print "Launching " + str(defaults[pressed])
+            appLaunch(DEFAULTS[pressed], True)
+            print("Launching " + str(DEFAULTS[pressed]))
         else:
-            print str(defaults[pressed]) + " is already running"
+            print(str(DEFAULTS[pressed]) + " is already running")
 
     # Othewise lets check the action to be run, based on the key pressed
-    elif pressed in defaults:
-        print defaults[pressed]
-        xdotool(defaults[pressed])
+    elif pressed in DEFAULTS.keys():
+        output = subprocess.check_output(DEFAULTS[pressed])
+        if verbose:
+            print(DEFAULTS[pressed], output)
 
     # Command not found sadly
     else:
-        print pressed, "command not found, Eish"
+        print(pressed, "command not found")
 
-# This little baby is what sends the command from the dictionary to the kernel to be processed.
-def xdotool(action, surpress=False):
-    ps = subprocess.Popen(action)
-    if surpress == False:
-        print action
 
 # Applications should be done a bit differently
 def appLaunch(action, surpress=False):
     FNULL = open('/dev/null', 'w')
-    ps = subprocess.Popen(action, shell=True, stderr=FNULL)
-    if surpress == False:
-        print action
+    subprocess.Popen(action, shell=True, stderr=FNULL)
+    if not surpress:
+        print(action)
